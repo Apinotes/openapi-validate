@@ -1,0 +1,346 @@
+name: 'ApiNotes OpenAPI Validate & Diff'
+description: 'Validate OpenAPI specs and detect breaking changes on every PR. Powered by apinotes.io'
+author: 'apinotes'
+
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  api-key:
+    description: 'Your ApiNotes API key (get one free at apinotes.io/dashboard/settings)'
+    required: true
+  spec-path:
+    description: 'Path to your OpenAPI spec file (e.g., openapi.yaml, docs/api.json)'
+    required: true
+    default: 'openapi.yaml'
+  diff-enabled:
+    description: 'Enable breaking change detection by diffing against base branch'
+    required: false
+    default: 'true'
+  fail-on-errors:
+    description: 'Fail the workflow if validation errors are found'
+    required: false
+    default: 'true'
+  fail-on-breaking:
+    description: 'Fail the workflow if breaking changes are detected'
+    required: false
+    default: 'false'
+  api-url:
+    description: 'ApiNotes API base URL (override for self-hosted)'
+    required: false
+    default: 'https://api.apinotes.io/api/v1'
+  comment-on-pr:
+    description: 'Post results as a PR comment'
+    required: false
+    default: 'true'
+
+outputs:
+  valid:
+    description: 'Whether the spec is valid (true/false)'
+    value: ${{ steps.validate.outputs.valid }}
+  errors-count:
+    description: 'Number of validation errors'
+    value: ${{ steps.validate.outputs.errors_count }}
+  warnings-count:
+    description: 'Number of validation warnings'
+    value: ${{ steps.validate.outputs.warnings_count }}
+  breaking-changes-count:
+    description: 'Number of breaking changes detected'
+    value: ${{ steps.diff.outputs.breaking_count }}
+  version:
+    description: 'Detected OpenAPI version'
+    value: ${{ steps.validate.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ── Step 1: Validate the spec in the PR branch ──
+    - name: Validate OpenAPI Spec
+      id: validate
+      shell: bash
+      env:
+        APINOTES_API_KEY: ${{ inputs.api-key }}
+        SPEC_PATH: ${{ inputs.spec-path }}
+        API_URL: ${{ inputs.api-url }}
+      run: |
+        echo "::group::🔍 Validating OpenAPI Spec"
+
+        # Check the spec file exists
+        if [ ! -f "$SPEC_PATH" ]; then
+          echo "::error::Spec file not found: $SPEC_PATH"
+          echo "valid=false" >> $GITHUB_OUTPUT
+          echo "errors_count=1" >> $GITHUB_OUTPUT
+          echo "warnings_count=0" >> $GITHUB_OUTPUT
+          echo "version=unknown" >> $GITHUB_OUTPUT
+          echo "validate_body={\"error\": \"File not found: $SPEC_PATH\"}" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        SPEC_CONTENT=$(cat "$SPEC_PATH")
+
+        # Detect content type
+        if [[ "$SPEC_PATH" == *.yaml ]] || [[ "$SPEC_PATH" == *.yml ]]; then
+          CONTENT_TYPE="text/yaml"
+        else
+          CONTENT_TYPE="application/json"
+        fi
+
+        # Call ApiNotes Validator API
+        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "${API_URL}/validator-api/validate" \
+          -H "X-API-Key: ${APINOTES_API_KEY}" \
+          -H "Content-Type: application/json" \
+          -d "$(jq -n \
+            --arg content "$SPEC_CONTENT" \
+            --arg contentType "$CONTENT_TYPE" \
+            '{content: $content, contentType: $contentType}'
+          )")
+
+        HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+        HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+        echo "API responded with status: $HTTP_STATUS"
+
+        # Parse results
+        VALID=$(echo "$HTTP_BODY" | jq -r '.valid // false')
+        ERRORS_COUNT=$(echo "$HTTP_BODY" | jq '.errors | length // 0')
+        WARNINGS_COUNT=$(echo "$HTTP_BODY" | jq '.warnings | length // 0')
+        VERSION=$(echo "$HTTP_BODY" | jq -r '.version // "unknown"')
+
+        echo "valid=$VALID" >> $GITHUB_OUTPUT
+        echo "errors_count=$ERRORS_COUNT" >> $GITHUB_OUTPUT
+        echo "warnings_count=$WARNINGS_COUNT" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+        # Save full response for comment step
+        echo "$HTTP_BODY" > /tmp/apinotes_validate.json
+
+        if [ "$VALID" = "true" ]; then
+          echo "✅ Spec is valid (OpenAPI $VERSION) — $WARNINGS_COUNT warning(s)"
+        else
+          echo "❌ Spec has $ERRORS_COUNT error(s), $WARNINGS_COUNT warning(s)"
+        fi
+
+        echo "::endgroup::"
+
+    # ── Step 2: Diff against base branch (if enabled + PR context) ──
+    - name: Diff Against Base Branch
+      id: diff
+      if: inputs.diff-enabled == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        APINOTES_API_KEY: ${{ inputs.api-key }}
+        SPEC_PATH: ${{ inputs.spec-path }}
+        API_URL: ${{ inputs.api-url }}
+      run: |
+        echo "::group::🔀 Detecting Breaking Changes"
+
+        # Get the spec from the base branch
+        BASE_REF="${{ github.event.pull_request.base.sha }}"
+        echo "Fetching spec from base: $BASE_REF"
+
+        BASE_SPEC=$(git show "${BASE_REF}:${SPEC_PATH}" 2>/dev/null || echo "")
+
+        if [ -z "$BASE_SPEC" ]; then
+          echo "ℹ️ Spec file doesn't exist on base branch — skipping diff (new file)"
+          echo "breaking_count=0" >> $GITHUB_OUTPUT
+          echo "diff_available=false" >> $GITHUB_OUTPUT
+          echo '{}' > /tmp/apinotes_diff.json
+          echo "::endgroup::"
+          exit 0
+        fi
+
+        PR_SPEC=$(cat "$SPEC_PATH")
+
+        # Call ApiNotes Diff API
+        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "${API_URL}/diff/compare" \
+          -H "Content-Type: application/json" \
+          -d "$(jq -n \
+            --arg specA "$BASE_SPEC" \
+            --arg specB "$PR_SPEC" \
+            '{specA: $specA, specB: $specB}'
+          )")
+
+        HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+        HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+        echo "Diff API responded with status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "⚠️ Diff comparison failed (status $HTTP_STATUS) — continuing"
+          echo "breaking_count=0" >> $GITHUB_OUTPUT
+          echo "diff_available=false" >> $GITHUB_OUTPUT
+          echo '{}' > /tmp/apinotes_diff.json
+          echo "::endgroup::"
+          exit 0
+        fi
+
+        # Parse diff results
+        BREAKING_COUNT=$(echo "$HTTP_BODY" | jq '.diff.breakingChanges | length // 0')
+        ADDED_COUNT=$(echo "$HTTP_BODY" | jq '.diff.addedEndpoints | length // 0')
+        REMOVED_COUNT=$(echo "$HTTP_BODY" | jq '.diff.removedEndpoints | length // 0')
+        CHANGED_COUNT=$(echo "$HTTP_BODY" | jq '.diff.changedEndpoints | length // 0')
+
+        echo "breaking_count=$BREAKING_COUNT" >> $GITHUB_OUTPUT
+        echo "added_count=$ADDED_COUNT" >> $GITHUB_OUTPUT
+        echo "removed_count=$REMOVED_COUNT" >> $GITHUB_OUTPUT
+        echo "changed_count=$CHANGED_COUNT" >> $GITHUB_OUTPUT
+        echo "diff_available=true" >> $GITHUB_OUTPUT
+
+        # Save for comment step
+        echo "$HTTP_BODY" > /tmp/apinotes_diff.json
+
+        echo "📊 Changes: +$ADDED_COUNT added, ~$CHANGED_COUNT changed, -$REMOVED_COUNT removed"
+        echo "⚠️  Breaking changes: $BREAKING_COUNT"
+
+        echo "::endgroup::"
+
+    # ── Step 3: Post PR Comment ──
+    - name: Post PR Comment
+      if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        VALID: ${{ steps.validate.outputs.valid }}
+        ERRORS_COUNT: ${{ steps.validate.outputs.errors_count }}
+        WARNINGS_COUNT: ${{ steps.validate.outputs.warnings_count }}
+        VERSION: ${{ steps.validate.outputs.version }}
+        BREAKING_COUNT: ${{ steps.diff.outputs.breaking_count || '0' }}
+        ADDED_COUNT: ${{ steps.diff.outputs.added_count || '0' }}
+        REMOVED_COUNT: ${{ steps.diff.outputs.removed_count || '0' }}
+        CHANGED_COUNT: ${{ steps.diff.outputs.changed_count || '0' }}
+        DIFF_AVAILABLE: ${{ steps.diff.outputs.diff_available || 'false' }}
+        DIFF_ENABLED: ${{ inputs.diff-enabled }}
+        SPEC_PATH: ${{ inputs.spec-path }}
+      with:
+        script: |
+          const fs = require('fs');
+
+          const valid = process.env.VALID === 'true';
+          const errorsCount = parseInt(process.env.ERRORS_COUNT) || 0;
+          const warningsCount = parseInt(process.env.WARNINGS_COUNT) || 0;
+          const version = process.env.VERSION;
+          const breakingCount = parseInt(process.env.BREAKING_COUNT) || 0;
+          const addedCount = parseInt(process.env.ADDED_COUNT) || 0;
+          const removedCount = parseInt(process.env.REMOVED_COUNT) || 0;
+          const changedCount = parseInt(process.env.CHANGED_COUNT) || 0;
+          const diffAvailable = process.env.DIFF_AVAILABLE === 'true';
+          const diffEnabled = process.env.DIFF_ENABLED === 'true';
+          const specPath = process.env.SPEC_PATH;
+
+          // Build validation section
+          let validateDetails = '';
+          try {
+            const raw = fs.readFileSync('/tmp/apinotes_validate.json', 'utf8');
+            const data = JSON.parse(raw);
+            if (data.errors && data.errors.length > 0) {
+              validateDetails += '\n<details><summary>🔴 Errors (' + data.errors.length + ')</summary>\n\n';
+              data.errors.slice(0, 20).forEach(e => {
+                validateDetails += `- \`${e.path || '/'}\` — ${e.message}\n`;
+              });
+              if (data.errors.length > 20) validateDetails += `\n_...and ${data.errors.length - 20} more_\n`;
+              validateDetails += '\n</details>\n';
+            }
+            if (data.warnings && data.warnings.length > 0) {
+              validateDetails += '\n<details><summary>🟡 Warnings (' + data.warnings.length + ')</summary>\n\n';
+              data.warnings.slice(0, 20).forEach(w => {
+                validateDetails += `- \`${w.path || '/'}\` — ${w.message}\n`;
+              });
+              if (data.warnings.length > 20) validateDetails += `\n_...and ${data.warnings.length - 20} more_\n`;
+              validateDetails += '\n</details>\n';
+            }
+          } catch (_) {}
+
+          // Build diff section
+          let diffSection = '';
+          if (diffEnabled && diffAvailable) {
+            diffSection = `\n---\n\n### 🔀 API Diff (vs base branch)\n\n`;
+            diffSection += `| Metric | Count |\n|--------|-------|\n`;
+            diffSection += `| ➕ Added endpoints | ${addedCount} |\n`;
+            diffSection += `| ✏️ Changed endpoints | ${changedCount} |\n`;
+            diffSection += `| ➖ Removed endpoints | ${removedCount} |\n`;
+            diffSection += `| ⚠️ **Breaking changes** | **${breakingCount}** |\n`;
+
+            // Show breaking change details
+            try {
+              const raw = fs.readFileSync('/tmp/apinotes_diff.json', 'utf8');
+              const data = JSON.parse(raw);
+              if (data.diff && data.diff.breakingChanges && data.diff.breakingChanges.length > 0) {
+                diffSection += '\n<details><summary>⚠️ Breaking Changes Details</summary>\n\n';
+                data.diff.breakingChanges.forEach(bc => {
+                  const severity = bc.severity === 'error' ? '🔴' : bc.severity === 'warn' ? '🟠' : 'ℹ️';
+                  diffSection += `- ${severity} \`${bc.method} ${bc.path}\` — ${bc.reason}\n`;
+                });
+                diffSection += '\n</details>\n';
+              }
+            } catch (_) {}
+          } else if (diffEnabled) {
+            diffSection = `\n---\n\n_ℹ️ Diff skipped — spec is new or not present on the base branch._\n`;
+          }
+
+          // Compose full comment
+          const statusIcon = valid ? '✅' : '❌';
+          const statusText = valid ? 'Valid' : 'Invalid';
+
+          let body = `## ${statusIcon} OpenAPI Validation Report\n\n`;
+          body += `| Property | Value |\n|----------|-------|\n`;
+          body += `| File | \`${specPath}\` |\n`;
+          body += `| Status | **${statusText}** |\n`;
+          body += `| OpenAPI Version | ${version} |\n`;
+          body += `| Errors | ${errorsCount} |\n`;
+          body += `| Warnings | ${warningsCount} |\n`;
+          body += validateDetails;
+          body += diffSection;
+          body += `\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
+
+          // Find and update existing comment, or create new one
+          const marker = '## ✅ OpenAPI Validation Report';
+          const marker2 = '## ❌ OpenAPI Validation Report';
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existing = comments.find(c =>
+            c.body.startsWith(marker) || c.body.startsWith(marker2)
+          );
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+
+    # ── Step 4: Fail if configured ──
+    - name: Check Failure Conditions
+      if: always()
+      shell: bash
+      env:
+        VALID: ${{ steps.validate.outputs.valid }}
+        FAIL_ON_ERRORS: ${{ inputs.fail-on-errors }}
+        BREAKING_COUNT: ${{ steps.diff.outputs.breaking_count || '0' }}
+        FAIL_ON_BREAKING: ${{ inputs.fail-on-breaking }}
+      run: |
+        if [ "$FAIL_ON_ERRORS" = "true" ] && [ "$VALID" != "true" ]; then
+          echo "::error::OpenAPI spec validation failed"
+          exit 1
+        fi
+
+        if [ "$FAIL_ON_BREAKING" = "true" ] && [ "$BREAKING_COUNT" != "0" ]; then
+          echo "::error::Breaking changes detected ($BREAKING_COUNT)"
+          exit 1
+        fi
+
+        echo "✅ All checks passed"
