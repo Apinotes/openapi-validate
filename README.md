@@ -1,2 +1,100 @@
-# openapi-validate
-Validate OpenAPI specs and detect breaking changes on every PR
+# 🔍 ApiNotes OpenAPI Validate & Diff
+
+**Validate your OpenAPI specs and detect breaking changes on every pull request.**
+
+Supports OpenAPI 3.0, 3.1, 3.2, and Swagger 2.0.
+
+## ✨ Features
+
+- ✅ **Validate** your OpenAPI spec against the full specification
+- 🔀 **Diff** against the base branch to detect breaking changes  
+- 💬 **PR Comments** with detailed error reports and change summaries
+- ⚡ **Fast** — runs in seconds, no Docker required
+- 🆓 **Free tier** — 20 validations/month, no credit card needed
+
+## 🚀 Quick Start
+
+```yaml
+# .github/workflows/openapi-check.yml
+name: OpenAPI Check
+on:
+  pull_request:
+    paths:
+      - 'openapi.yaml'
+      - 'openapi.json'
+      - 'docs/api/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for diff against base branch
+
+      - uses: apinotes/openapi-validate@v1
+        with:
+          api-key: ${{ secrets.APINOTES_API_KEY }}
+          spec-path: 'openapi.yaml'
+```
+
+## 📦 Get Your Free API Key
+
+1. Go to [apinotes.io](https://apinotes.io?utm_source=github-action)
+2. Create a free account
+3. Go to Dashboard → Settings → API Keys
+4. Copy your key and add it as `APINOTES_API_KEY` in your repo's Settings → Secrets
+
+## ⚙️ Configuration
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `api-key` | *required* | Your ApiNotes API key |
+| `spec-path` | `openapi.yaml` | Path to your OpenAPI spec |
+| `diff-enabled` | `true` | Diff against base branch for breaking changes |
+| `fail-on-errors` | `true` | Fail the workflow if spec is invalid |
+| `fail-on-breaking` | `false` | Fail the workflow if breaking changes found |
+| `comment-on-pr` | `true` | Post results as a PR comment |
+
+## 📊 Example PR Comment
+
+When the action runs, it posts a comment like this on your PR:
+
+> ## ✅ OpenAPI Validation Report
+> | Property | Value |
+> |----------|-------|
+> | File | `openapi.yaml` |
+> | Status | **Valid** |
+> | OpenAPI Version | 3.1 |
+> | Errors | 0 |
+> | Warnings | 2 |
+>
+> ---
+> ### 🔀 API Diff (vs base branch)
+> | Metric | Count |
+> |--------|-------|
+> | ➕ Added endpoints | 2 |
+> | ✏️ Changed endpoints | 1 |
+> | ➖ Removed endpoints | 0 |
+> | ⚠️ **Breaking changes** | **1** |
+
+## 🔀 Breaking Change Detection
+
+The diff engine detects:
+- 🔴 Removed endpoints
+- 🔴 Required parameters added
+- 🔴 Response schema fields removed
+- 🔴 Authentication requirements changed  
+- 🟠 OperationId changes
+- 🟠 Deprecated endpoints
+- ℹ️ New endpoints, tags, descriptions
+
+## 💰 Pricing
+
+| Plan | Validations/month | Price |
+|------|-------------------|-------|
+| Starter | 20 | Free |
+| Developer | 1,000 | $6.99/mo |
+| Enterprise | Unlimited | [Contact us](mailto:hello@apinotes.io) |
+
+## 📄 License
