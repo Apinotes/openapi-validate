@@ -24,6 +24,10 @@ on:
       - 'openapi.json'
       - 'docs/api/**'
 
+permissions:
+  contents: read        # needed for actions/checkout
+  pull-requests: write  # needed for posting PR comments
+
 jobs:
   validate:
     runs-on: ubuntu-latest
