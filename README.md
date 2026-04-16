@@ -89,6 +89,19 @@ The diff engine detects:
 - 🟠 Deprecated endpoints
 - ℹ️ New endpoints, tags, descriptions
 
+## 🚫 Block PRs with Invalid Specs
+
+The action fails the check when `fail-on-errors: true` (the default).
+To prevent merging broken specs:
+
+1. Go to your repo → **Settings** → **Branches**
+2. Add a branch protection rule for `main`
+3. Enable **"Require status checks to pass before merging"**
+4. Search for and select the **`validate`** job name
+5. Save
+
+Now PRs with invalid OpenAPI specs cannot be merged.
+
 ## 💰 Pricing
 
 | Plan | Validations/month | Price |
