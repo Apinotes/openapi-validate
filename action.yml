@@ -8,8 +8,9 @@ branding:
 
 inputs:
   api-key:
-    description: 'Your ApiNotes API key (get one free at apinotes.io/dashboard/settings)'
-    required: true
+    description: 'Your ApiNotes API key (get one free at apinotes.io/dashboard/settings). Optional for public repositories — GitHub Actions on public repos are validated for free without a key.'
+    required: false
+    default: ''
   spec-path:
     description: 'Path to your OpenAPI spec file (e.g., openapi.yaml, docs/api.json)'
     required: true
@@ -86,10 +87,19 @@ runs:
           CONTENT_TYPE="application/json"
         fi
 
+        # Build auth headers: API key takes priority; fall back to GitHub Action free tier
+        CURL_AUTH_ARGS=()
+        if [ -n "$APINOTES_API_KEY" ]; then
+          CURL_AUTH_ARGS+=(-H "X-API-Key: ${APINOTES_API_KEY}")
+        else
+          echo "ℹ️ No API key provided — using GitHub Action free tier (public repos only)"
+          CURL_AUTH_ARGS+=(-H "X-GitHub-Action: true" -H "X-GitHub-Repository: ${GITHUB_REPOSITORY}")
+        fi
+
         # Call ApiNotes Validator API
         HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
           -X POST "${API_URL}/validator-api/validate" \
-          -H "X-API-Key: ${APINOTES_API_KEY}" \
+          "${CURL_AUTH_ARGS[@]}" \
           -H "Content-Type: application/json" \
           -d "$(jq -n \
             --arg content "$SPEC_CONTENT" \
