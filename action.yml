@@ -89,11 +89,13 @@ runs:
 
         # Build auth headers: API key takes priority; fall back to GitHub Action free tier
         CURL_AUTH_ARGS=()
+        FREE_TIER=false
         if [ -n "$APINOTES_API_KEY" ]; then
           CURL_AUTH_ARGS+=(-H "X-API-Key: ${APINOTES_API_KEY}")
         else
           echo "ℹ️ No API key provided — using GitHub Action free tier (public repos only)"
           CURL_AUTH_ARGS+=(-H "X-GitHub-Action: true" -H "X-GitHub-Repository: ${GITHUB_REPOSITORY}")
+          FREE_TIER=true
         fi
 
         # Call ApiNotes Validator API
@@ -122,6 +124,7 @@ runs:
         echo "errors_count=$ERRORS_COUNT" >> $GITHUB_OUTPUT
         echo "warnings_count=$WARNINGS_COUNT" >> $GITHUB_OUTPUT
         echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "free_tier=$FREE_TIER" >> $GITHUB_OUTPUT
 
         # Save full response for comment step
         echo "$HTTP_BODY" > /tmp/apinotes_validate.json
@@ -223,6 +226,7 @@ runs:
         DIFF_AVAILABLE: ${{ steps.diff.outputs.diff_available || 'false' }}
         DIFF_ENABLED: ${{ inputs.diff-enabled }}
         SPEC_PATH: ${{ inputs.spec-path }}
+        FREE_TIER: ${{ steps.validate.outputs.free_tier }}
       with:
         script: |
           const fs = require('fs');
@@ -238,6 +242,7 @@ runs:
           const diffAvailable = process.env.DIFF_AVAILABLE === 'true';
           const diffEnabled = process.env.DIFF_ENABLED === 'true';
           const specPath = process.env.SPEC_PATH;
+          const freeTier = process.env.FREE_TIER === 'true';
 
           // Build validation section
           let validateDetails = '';
@@ -298,8 +303,11 @@ runs:
           body += `| File | \`${specPath}\` |\n`;
           body += `| Status | **${statusText}** |\n`;
           body += `| OpenAPI Version | ${version} |\n`;
-          body += `| Errors | ${errorsCount} |\n`;
+          body += `| Errors | ${errorsCount} |`;
           body += `| Warnings | ${warningsCount} |\n`;
+          if (freeTier) {
+            body += `\n> ℹ️ **Free tier** — validated without an API key. [Get a key](https://apinotes.io) for higher rate limits and private repository support.\n`;
+          }
           body += validateDetails;
           body += diffSection;
           body += `\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
