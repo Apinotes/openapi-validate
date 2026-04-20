@@ -1,0 +1,58 @@
+openapi: 3.2.0
+$self: https://api.example.com/openapi.yaml
+info:
+  title: OpenAPI 3.2 Valid YAML Fixture
+  version: 1.0.0
+  description: Valid OpenAPI 3.2 fixture in YAML format
+servers:
+  - url: https://api.example.com/v1
+    name: prod
+    description: Production
+tags:
+  - name: external
+    kind: audience
+  - name: partner
+    parent: external
+    kind: audience
+paths:
+  /search:
+    query:
+      summary: Search resources
+      responses:
+        '200':
+          description: OK
+    additionalOperations:
+      PURGE:
+        summary: Purge cache
+        responses:
+          '204':
+            description: No Content
+  /users:
+    get:
+      summary: List users
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+  securitySchemes:
+    deviceAuth:
+      type: oauth2
+      deprecated: false
+      flows:
+        deviceAuthorization:
+          deviceAuthorizationUrl: https://auth.example.com/device
+          tokenUrl: https://auth.example.com/token
+          scopes: {}
