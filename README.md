@@ -42,12 +42,16 @@ jobs:
           spec-path: 'openapi.yaml'
 ```
 
-## 📦 Get Your Free API Key
+## 🔑 API Key Setup (Private Repos Only)
 
-1. Go to [apinotes.io](https://apinotes.io?utm_source=github-action)
-2. Create a free account
-3. Go to Dashboard → Settings → API Keys
-4. Copy your key and add it as `APINOTES_API_KEY` in your repo's Settings → Secrets
+Public repositories work out of the box — **no account or API key needed.**
+
+For private repositories, set up an API key:
+
+1. Create a free account at [apinotes.io](https://apinotes.io?utm_source=github-action)
+2. Go to **Dashboard → Settings → API Keys**
+3. Copy your key
+4. In your repo, go to **Settings → Secrets → Actions** and add `APINOTES_API_KEY`
 
 ## ⚙️ Configuration
 
