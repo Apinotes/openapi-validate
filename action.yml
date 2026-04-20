@@ -126,6 +126,13 @@ runs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "free_tier=$FREE_TIER" >> $GITHUB_OUTPUT
 
+        # Detect auth failure (free tier rejected by server — likely private repo)
+        AUTH_FAILED=false
+        if [ "$FREE_TIER" = "true" ] && { [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; }; then
+          AUTH_FAILED=true
+        fi
+        echo "auth_failed=$AUTH_FAILED" >> $GITHUB_OUTPUT
+
         # Save full response for comment step
         echo "$HTTP_BODY" > /tmp/apinotes_validate.json
 
@@ -227,6 +234,7 @@ runs:
         DIFF_ENABLED: ${{ inputs.diff-enabled }}
         SPEC_PATH: ${{ inputs.spec-path }}
         FREE_TIER: ${{ steps.validate.outputs.free_tier }}
+        AUTH_FAILED: ${{ steps.validate.outputs.auth_failed }}
       with:
         script: |
           const fs = require('fs');
@@ -243,6 +251,29 @@ runs:
           const diffEnabled = process.env.DIFF_ENABLED === 'true';
           const specPath = process.env.SPEC_PATH;
           const freeTier = process.env.FREE_TIER === 'true';
+          const authFailed = process.env.AUTH_FAILED === 'true';
+
+          // Auth failure (private repo, no API key) — skip tables, post a single actionable line
+          if (authFailed) {
+            const body = `## 🔐 OpenAPI Validation Report\n\nValidation could not run — this repository is **private** and requires an API key.\n\nAdd your key to the workflow:\n\`\`\`yaml\n- uses: apinotes/validate-action@v1\n  with:\n    api-key: \${{ secrets.APINOTES_API_KEY }}\n\`\`\`\n\nGet a free key at [apinotes.io](https://apinotes.io).\n\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
+            const marker = '## 🔐 OpenAPI Validation Report';
+            const markerOk = '## ✅ OpenAPI Validation Report';
+            const markerFail = '## ❌ OpenAPI Validation Report';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.body.startsWith(marker) || c.body.startsWith(markerOk) || c.body.startsWith(markerFail)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            }
+            return;
+          }
 
           // Build validation section
           let validateDetails = '';
@@ -303,10 +334,10 @@ runs:
           body += `| File | \`${specPath}\` |\n`;
           body += `| Status | **${statusText}** |\n`;
           body += `| OpenAPI Version | ${version} |\n`;
-          body += `| Errors | ${errorsCount} |`;
+          body += `| Errors | ${errorsCount} |\n`;
           body += `| Warnings | ${warningsCount} |\n`;
           if (freeTier) {
-            body += `\n> ℹ️ **Free tier** — validated without an API key. [Get a key](https://apinotes.io) for higher rate limits and private repository support.\n`;
+            body += `\n> ℹ️ Validating a private repository? [Add an API key](https://apinotes.io) to your workflow.\n`;
           }
           body += validateDetails;
           body += diffSection;
