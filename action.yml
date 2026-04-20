@@ -255,7 +255,7 @@ runs:
 
           // Auth failure (private repo, no API key) — skip tables, post a single actionable line
           if (authFailed) {
-            const body = `## 🔐 OpenAPI Validation Report\n\nValidation could not run — this repository is **private** and requires an API key.\n\nAdd your key to the workflow:\n\`\`\`yaml\n- uses: apinotes/validate-action@v1\n  with:\n    api-key: \${{ secrets.APINOTES_API_KEY }}\n\`\`\`\n\nGet a free key at [apinotes.io](https://apinotes.io).\n\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
+            const body = `## 🔐 OpenAPI Validation Report\n\nValidation could not run — this repository is **private** and requires an API key.\n\nAdd your key to the workflow:\n\`\`\`yaml\n- uses: apinotes/validate-action@v1\n  with:\n    api-key: ` + '$' + `{{ secrets.APINOTES_API_KEY }}\n\`\`\`\n\nGet a free key at [apinotes.io](https://apinotes.io).\n\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
             const marker = '## 🔐 OpenAPI Validation Report';
             const markerOk = '## ✅ OpenAPI Validation Report';
             const markerFail = '## ❌ OpenAPI Validation Report';
