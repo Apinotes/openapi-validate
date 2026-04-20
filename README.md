@@ -7,12 +7,14 @@ Supports OpenAPI 3.0, 3.1, 3.2, and Swagger 2.0.
 ## ✨ Features
 
 - ✅ **Validate** your OpenAPI spec against the full specification
-- 🔀 **Diff** against the base branch to detect breaking changes  
+- 🔀 **Diff** against the base branch to detect breaking changes
 - 💬 **PR Comments** with detailed error reports and change summaries
 - ⚡ **Fast** — runs in seconds, no Docker required
-- 🆓 **Free tier** — 20 validations/month, no credit card needed
+- 🆓 **Free for public repos** — unlimited validations, no account needed
 
 ## 🚀 Quick Start
+
+### Public Repositories (no API key needed)
 
 ```yaml
 # .github/workflows/openapi-check.yml
@@ -25,8 +27,8 @@ on:
       - 'docs/api/**'
 
 permissions:
-  contents: read        # needed for actions/checkout
-  pull-requests: write  # needed for posting PR comments
+  contents: read
+  pull-requests: write
 
 jobs:
   validate:
@@ -34,8 +36,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for diff against base branch
+          fetch-depth: 0
 
+      - uses: apinotes/openapi-validate@v1
+        with:
+          spec-path: 'openapi.yaml'
+```
+
+### Private Repositories (API key required)
+
+```yaml
       - uses: apinotes/openapi-validate@v1
         with:
           api-key: ${{ secrets.APINOTES_API_KEY }}
@@ -55,14 +65,14 @@ For private repositories, set up an API key:
 
 ## ⚙️ Configuration
 
-| Input | Default | Description |
-|-------|---------|-------------|
-| `api-key` | *required* | Your ApiNotes API key |
-| `spec-path` | `openapi.yaml` | Path to your OpenAPI spec |
-| `diff-enabled` | `true` | Diff against base branch for breaking changes |
-| `fail-on-errors` | `true` | Fail the workflow if spec is invalid |
-| `fail-on-breaking` | `false` | Fail the workflow if breaking changes found |
-| `comment-on-pr` | `true` | Post results as a PR comment |
+| Input | Default | Required | Description |
+|-------|---------|----------|-------------|
+| `api-key` | — | Private repos only | Your ApiNotes API key |
+| `spec-path` | `openapi.yaml` | Yes | Path to your OpenAPI spec |
+| `diff-enabled` | `true` | No | Diff against base branch for breaking changes |
+| `fail-on-errors` | `true` | No | Fail the workflow if spec is invalid |
+| `fail-on-breaking` | `false` | No | Fail the workflow if breaking changes found |
+| `comment-on-pr` | `true` | No | Post results as a PR comment |
 
 ## 📊 Example PR Comment
 
@@ -92,7 +102,7 @@ The diff engine detects:
 - 🔴 Removed endpoints
 - 🔴 Required parameters added
 - 🔴 Response schema fields removed
-- 🔴 Authentication requirements changed  
+- 🔴 Authentication requirements changed
 - 🟠 OperationId changes
 - 🟠 Deprecated endpoints
 - ℹ️ New endpoints, tags, descriptions
@@ -118,3 +128,6 @@ Now PRs with invalid OpenAPI specs cannot be merged.
 | Starter | Private | 8 | Yes | Free |
 | Developer | Private | 1,000 | Yes | $6.99/mo |
 
+## 📄 License
+
+MIT
