@@ -3,7 +3,7 @@ $self: https://api.example.com/openapi.yaml
 info:
   title: OpenAPI 3.2 Valid YAML Fixture
   version: 1.0.0
-  description: Valid OpenAPI 3.2 fixture in YAML format
+  description: Valid OpenAPI 3.2 fixture in YAML
 servers:
   - url: https://api.example.com/v1
     name: prod
