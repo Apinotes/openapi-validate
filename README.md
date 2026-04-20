@@ -108,10 +108,10 @@ Now PRs with invalid OpenAPI specs cannot be merged.
 
 ## 💰 Pricing
 
-| Plan | Validations/month | Price |
-|------|-------------------|-------|
-| Starter | 20 | Free |
-| Developer | 1,000 | $6.99/mo |
-| Enterprise | Unlimited | [Contact us](mailto:hello@apinotes.io) |
+| Plan | Repo Type | Validations/month | Account Required | Price |
+|------|-----------|-------------------|------------------|-------|
+| Open Source | Public | Unlimited | No | Free |
+| Starter | Private | 20 | Yes | Free |
+| Developer | Private | 1,000 | Yes | $6.99/mo |
 
 ## 📄 License
