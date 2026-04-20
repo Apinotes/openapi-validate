@@ -3,7 +3,7 @@ name: OpenAPI Check
 on:
   pull_request:
     paths:
-      - 'test/**'
+      - '*'
 
 permissions:
   contents: read        # needed for actions/checkout
@@ -19,5 +19,4 @@ jobs:
 
       - uses: apinotes/openapi-validate@main
         with:
-          api-key: ${{ secrets.APINOTES_API_KEY }}
           spec-path: 'openapi32-valid.yaml'
