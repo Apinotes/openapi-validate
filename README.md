@@ -111,7 +111,6 @@ Now PRs with invalid OpenAPI specs cannot be merged.
 | Plan | Repo Type | Validations/month | Account Required | Price |
 |------|-----------|-------------------|------------------|-------|
 | Open Source | Public | Unlimited | No | Free |
-| Starter | Private | 20 | Yes | Free |
+| Starter | Private | 8 | Yes | Free |
 | Developer | Private | 1,000 | Yes | $6.99/mo |
 
-## 📄 License
