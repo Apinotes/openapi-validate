@@ -1,0 +1,23 @@
+# .github/workflows/openapi-check.yml
+name: OpenAPI Check
+on:
+  pull_request:
+    paths:
+      - 'test/**'
+
+permissions:
+  contents: read        # needed for actions/checkout
+  pull-requests: write  # needed for posting PR comments
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for diff against base branch
+
+      - uses: apinotes/openapi-validate@main
+        with:
+          api-key: ${{ secrets.APINOTES_API_KEY }}
+          spec-path: 'openapi32-valid.yaml'
