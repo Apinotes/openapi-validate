@@ -341,7 +341,9 @@ runs:
           }
           body += validateDetails;
           body += diffSection;
-          body += `\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
+          if (freeTier) {
+            body += `\n---\n<sub>Powered by <a href="https://apinotes.io/openapi-validator?utm_source=github-action&utm_medium=pr-comment">ApiNotes</a> — Free OpenAPI Validator, Mock Server & Diff Tool</sub>`;
+          }
 
           // Find and update existing comment, or create new one
           const marker = '## ✅ OpenAPI Validation Report';
