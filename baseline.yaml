@@ -1,0 +1,316 @@
+openapi: 3.2.0
+$self: https://api.example.com/openapi.yaml
+info:
+  title: Watcher Sample API
+  version: 1.0.0
+  description: Baseline OpenAPI 3.2 spec with no breaking changes. Diff this against breaking.yaml.
+servers:
+  - url: https://api.example.com/v1
+    name: prod
+    description: Production
+  - url: https://eu.api.example.com/v1
+    name: eu
+    description: EU region
+tags:
+  - name: users
+    kind: nav
+  - name: orders
+    kind: nav
+security:
+  - apiKeyAuth: []
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      tags:
+        - users
+      summary: List users
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 100
+        - name: legacyFilter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: emptyOk
+          in: query
+          allowEmptyValue: true
+          schema:
+            type: string
+        - name: sort
+          in: query
+          style: form
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Rate-Limit:
+              required: true
+              schema:
+                type: integer
+            X-Trace:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - name
+                  - legacy
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                    maxLength: 80
+                  legacy:
+                    type: string
+                  score:
+                    type: number
+                    nullable: false
+                  createdAt:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                    enum:
+                      - active
+                      - banned
+                  list:
+                    type: array
+                    items:
+                      type: string
+                  variant:
+                    type: string
+            application/xml:
+              schema:
+                type: object
+        '404':
+          description: Not Found
+    post:
+      operationId: createUser
+      tags:
+        - users
+      summary: Create user
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                email:
+                  type: string
+                age:
+                  type: integer
+                role:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                nickname:
+                  type: string
+                  nullable: true
+                code:
+                  type: string
+                qty:
+                  type: integer
+                tags:
+                  type: array
+                meta:
+                  type: object
+                  additionalProperties: true
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '201':
+          description: Created
+  /users/{id}:
+    get:
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Not Found
+    put:
+      operationId: replaceUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /legacy:
+    get:
+      operationId: legacyEndpoint
+      summary: Removed without deprecation in breaking.yaml
+      responses:
+        '200':
+          description: OK
+  /legacy-deprecated:
+    get:
+      operationId: legacyDeprecatedEndpoint
+      deprecated: true
+      summary: Removed after deprecation in breaking.yaml
+      responses:
+        '200':
+          description: OK
+  /orders:
+    get:
+      operationId: listOrders
+      tags:
+        - orders
+      summary: List orders
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /reports:
+    post:
+      operationId: createReport
+      summary: Create report
+      responses:
+        '201':
+          description: Created
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    basicAuth:
+      type: http
+      scheme: basic
+    tokenAuth:
+      type: http
+      scheme: bearer
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/authorize
+          tokenUrl: https://auth.example.com/token
+          scopes:
+            read: Read access
+            write: Write access
+        implicit:
+          authorizationUrl: https://auth.example.com/authorize
+          scopes:
+            read: Read access
+    legacyAuth:
+      type: apiKey
+      in: header
+      name: X-Legacy
+  schemas:
+    Order:
+      type: object
+      required:
+        - orderId
+        - total
+      properties:
+        orderId:
+          type: string
+        total:
+          type: number
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+            - shipped
+        note:
+          type: string
+    Catalog:
+      type: object
+      required:
+        - sku
+      properties:
+        sku:
+          type: string
+        price:
+          type: number
+          minimum: 0
+        label:
+          type: string
+    Shape:
+      oneOf:
+        - type: object
+          required:
+            - shapeType
+          properties:
+            shapeType:
+              type: string
+              enum:
+                - circle
+            radius:
+              type: number
+        - type: object
+          required:
+            - shapeType
+          properties:
+            shapeType:
+              type: string
+              enum:
+                - square
+            side:
+              type: number
+      discriminator:
+        propertyName: shapeType
+    Bundle:
+      allOf:
+        - type: object
+          properties:
+            sku:
+              type: string
+    LegacySchema:
+      type: object
+      properties:
+        x:
+          type: string
