@@ -2,102 +2,108 @@ openapi: 3.2.0
 $self: https://api.example.com/openapi.yaml
 info:
   title: Watcher Sample API
-  version: 1.0.0
-  description: Baseline OpenAPI 3.2 spec with no breaking changes. Diff this against breaking.yaml.
+  version: 2.0.0
+  description: Copy of baseline.yaml with every breaking change the watcher diff engine detects.
 servers:
   - url: https://api.example.com/v1
     name: prod
     description: Production
-  - url: https://eu.api.example.com/v1
-    name: eu
-    description: EU region
+  # api-server-removed: the eu server is gone
 tags:
   - name: users
     kind: nav
   - name: orders
     kind: nav
 security:
-  - apiKeyAuth: []
+  # security-requirement-added + security-scope-added (write scope on apiKeyAuth)
+  - apiKeyAuth:
+      - write
+  - oauth2:
+      - read
 paths:
   /users:
     get:
-      operationId: listUsers
-      tags:
-        - users
+      # api-operation-id-removed: operationId dropped
+      # api-tag-removed: users tag dropped
       summary: List users
       parameters:
+        # request-parameter-became-required: limit now required
+        # request-property-maximum-decreased: maximum 100 -> 50
         - name: limit
           in: query
-          required: false
+          required: true
           schema:
             type: integer
-            maximum: 100
-        - name: legacyFilter
-          in: query
-          required: false
-          schema:
-            type: string
+            maximum: 50
+        # request-parameter-removed (optional -> warn): legacyFilter gone
+        # request-parameter-allow-empty-value-removed: emptyOk loses allowEmptyValue
         - name: emptyOk
           in: query
-          allowEmptyValue: true
+          allowEmptyValue: false
           schema:
             type: string
+        # request-parameter-style-changed + request-property-enum-value-removed (desc gone)
         - name: sort
           in: query
-          style: form
+          style: spaceDelimited
           schema:
             type: string
             enum:
               - asc
-              - desc
+        # new-required-request-parameter: brand new required param
+        - name: tenant
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           headers:
-            X-Rate-Limit:
-              required: true
-              schema:
-                type: integer
+            # response-required-header-removed: X-Rate-Limit gone
+            # response-header-became-optional: X-Trace no longer required
             X-Trace:
-              required: true
+              required: false
               schema:
                 type: string
           content:
             application/json:
               schema:
                 type: object
+                # response-required-property-removed: legacy dropped from required + properties
                 required:
                   - id
                   - name
-                  - legacy
                 properties:
+                  # response-property-type-changed: string -> integer
                   id:
-                    type: string
+                    type: integer
+                  # response-property-max-length-removed: maxLength loosened
                   name:
                     type: string
-                    maxLength: 80
-                  legacy:
-                    type: string
+                  # response-property-became-nullable: false -> true
                   score:
                     type: number
-                    nullable: false
+                    nullable: true
+                  # response-property-format-changed: date-time -> date
                   createdAt:
                     type: string
-                    format: date-time
+                    format: date
+                  # response-property-enum-value-removed (banned) + enum-value-added (suspended)
                   status:
                     type: string
                     enum:
                       - active
-                      - banned
+                      - suspended
+                  # array-items-schema-removed (response)
                   list:
                     type: array
-                    items:
-                      type: string
+                  # response-body-oneOf-added: variant gains a oneOf
                   variant:
-                    type: string
-            application/xml:
-              schema:
-                type: object
+                    oneOf:
+                      - type: string
+                      - type: integer
+            # response-media-type-removed: application/xml gone
         '404':
           description: Not Found
     post:
@@ -105,45 +111,59 @@ paths:
       tags:
         - users
       summary: Create user
+      # request-body-became-required: required false -> true
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              # request-property-became-required (email) + new-required-request-property (token)
               required:
                 - name
+                - email
+                - token
               properties:
+                # request-property-max-length-decreased: 50 -> 30
                 name:
                   type: string
-                  maxLength: 50
+                  maxLength: 30
                 email:
                   type: string
+                token:
+                  type: string
+                # request-property-type-changed: integer -> string
                 age:
-                  type: integer
+                  type: string
+                # request-property-enum-value-removed: admin gone
                 role:
                   type: string
                   enum:
                     - user
-                    - admin
+                # request-property-became-not-nullable: true -> false
                 nickname:
                   type: string
-                  nullable: true
+                  nullable: false
+                # request-property-pattern-added
                 code:
                   type: string
+                  pattern: '^[A-Z]{3}$'
+                # request-property-minimum-set (tightened)
                 qty:
                   type: integer
+                  minimum: 1
+                # array-items-schema-added (request)
                 tags:
                   type: array
+                  items:
+                    type: string
+                # additional-properties-removed (request)
                 meta:
                   type: object
-                  additionalProperties: true
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
+                  additionalProperties: false
+          # request-body-media-type-removed: form urlencoded gone
       responses:
-        '200':
-          description: OK
+        # response-success-status-removed: 200 gone
         '201':
           description: Created
   /users/{id}:
@@ -172,35 +192,16 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
+      # request-body-removed: the whole body is gone
       responses:
         '200':
           description: OK
-  /legacy:
-    get:
-      operationId: legacyEndpoint
-      summary: Removed without deprecation in breaking.yaml
-      responses:
-        '200':
-          description: OK
-  /legacy-deprecated:
-    get:
-      operationId: legacyDeprecatedEndpoint
-      deprecated: true
-      summary: Removed after deprecation in breaking.yaml
-      responses:
-        '200':
-          description: OK
+  # /legacy removed -> api-removed-without-deprecation
+  # /legacy-deprecated removed -> api-removed-with-deprecation
   /orders:
     get:
+      # api-deprecated: endpoint now deprecated
+      deprecated: true
       operationId: listOrders
       tags:
         - orders
@@ -216,76 +217,89 @@ paths:
     post:
       operationId: createReport
       summary: Create report
+      # request-body-added-required: brand new required body
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
       responses:
         '201':
           description: Created
 components:
   securitySchemes:
+    # security-scheme-in-changed (header -> query) + security-scheme-param-name-changed
     apiKeyAuth:
       type: apiKey
-      in: header
-      name: X-API-Key
+      in: query
+      name: api_key
+    # security-scheme-scheme-changed (basic -> bearer)
     basicAuth:
       type: http
-      scheme: basic
-    tokenAuth:
-      type: http
       scheme: bearer
+    # security-scheme-type-changed (http -> apiKey)
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: X-Token
     oauth2:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: https://auth.example.com/authorize
-          tokenUrl: https://auth.example.com/token
+          # security-scheme-oauth-authorization-url-changed
+          authorizationUrl: https://auth.example.com/oauth/authorize
+          # security-scheme-oauth-token-url-changed
+          tokenUrl: https://auth.example.com/oauth/token
           scopes:
             read: Read access
-            write: Write access
-        implicit:
-          authorizationUrl: https://auth.example.com/authorize
-          scopes:
-            read: Read access
-    legacyAuth:
-      type: apiKey
-      in: header
-      name: X-Legacy
+            # security-scheme-oauth-scope-removed: write gone
+        # security-scheme-oauth-flow-removed: implicit flow gone
+    # security-scheme-removed: legacyAuth gone
   schemas:
     Order:
       type: object
+      # component-schema property-removed/required-removed/type-changed (null direction)
+      # response-required-property-removed where referenced (response direction)
       required:
         - orderId
-        - total
       properties:
+        # type-changed: string -> integer
         orderId:
-          type: string
-        total:
-          type: number
+          type: integer
+        # total removed entirely (was required)
         status:
           type: string
+          # enum value removed: shipped gone
           enum:
             - open
             - closed
-            - shipped
         note:
           type: string
     Catalog:
       type: object
       required:
         - sku
+        - price
       properties:
         sku:
           type: string
+        # schema-minimum-changed (tightened): 0 -> 10
         price:
           type: number
-          minimum: 0
-        label:
-          type: string
+          minimum: 10
+        # label property-removed
     Shape:
+      # schema-discriminator-changed: propertyName shapeType -> kind
       oneOf:
         - type: object
           required:
-            - shapeType
+            - kind
           properties:
-            shapeType:
+            kind:
               type: string
               enum:
                 - circle
@@ -293,24 +307,20 @@ components:
               type: number
         - type: object
           required:
-            - shapeType
+            - kind
           properties:
-            shapeType:
+            kind:
               type: string
               enum:
                 - square
             side:
               type: number
       discriminator:
-        propertyName: shapeType
+        propertyName: kind
     Bundle:
-      allOf:
-        - type: object
-          properties:
-            sku:
-              type: string
-    LegacySchema:
+      # schema-allOf-removed: allOf dropped
       type: object
       properties:
-        x:
+        sku:
           type: string
+    # LegacySchema removed -> component-schema-removed
