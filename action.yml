@@ -35,6 +35,14 @@ inputs:
     description: 'Post results as a PR comment'
     required: false
     default: 'true'
+  project-id:
+    description: 'ApiNotes project ID to sync the spec to (found on your project dashboard). Requires api-key. When set, the spec is pushed to your hosted docs on non-PR events (e.g. merge to main).'
+    required: false
+    default: ''
+  sync-on-push:
+    description: 'Sync the spec to your ApiNotes project on push events (requires project-id and api-key). Set to false to disable syncing without removing project-id.'
+    required: false
+    default: 'true'
 
 outputs:
   valid:
@@ -52,6 +60,12 @@ outputs:
   version:
     description: 'Detected OpenAPI version'
     value: ${{ steps.validate.outputs.version }}
+  synced:
+    description: 'Whether the spec was synced to your ApiNotes project (true/false)'
+    value: ${{ steps.sync.outputs.synced }}
+  docs-version:
+    description: 'New documentation version number created by the sync'
+    value: ${{ steps.sync.outputs.docs_version }}
 
 runs:
   using: 'composite'
@@ -215,6 +229,59 @@ runs:
         echo "📊 Changes: +$ADDED_COUNT added, ~$CHANGED_COUNT changed, -$REMOVED_COUNT removed"
         echo "⚠️  Breaking changes: $BREAKING_COUNT"
 
+        echo "::endgroup::"
+
+    # ── Step 2.5: Sync spec to ApiNotes project (non-PR events, e.g. merge to main) ──
+    - name: Sync Spec to ApiNotes Project
+      id: sync
+      if: inputs.project-id != '' && inputs.sync-on-push == 'true' && github.event_name != 'pull_request' && steps.validate.outputs.valid == 'true'
+      shell: bash
+      env:
+        APINOTES_API_KEY: ${{ inputs.api-key }}
+        SPEC_PATH: ${{ inputs.spec-path }}
+        API_URL: ${{ inputs.api-url }}
+        PROJECT_ID: ${{ inputs.project-id }}
+      run: |
+        echo "::group::🚀 Syncing Spec to ApiNotes Docs"
+
+        if [ -z "$APINOTES_API_KEY" ]; then
+          echo "::error::project-id is set but no api-key was provided. Syncing docs requires an API key — get one at https://apinotes.io/dashboard/settings"
+          echo "synced=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        # Detect content type
+        if [[ "$SPEC_PATH" == *.yaml ]] || [[ "$SPEC_PATH" == *.yml ]]; then
+          CONTENT_TYPE="text/yaml"
+        else
+          CONTENT_TYPE="application/json"
+        fi
+
+        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X PUT "${API_URL}/upload/projects/${PROJECT_ID}/spec" \
+          -H "X-API-Key: ${APINOTES_API_KEY}" \
+          -H "Content-Type: ${CONTENT_TYPE}" \
+          --data-binary @"$SPEC_PATH")
+
+        HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+        HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -1)
+
+        echo "Sync API responded with status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" != "200" ]; then
+          MESSAGE=$(echo "$HTTP_BODY" | jq -r '.message // "Unknown error"')
+          echo "::error::Failed to sync spec to ApiNotes project ${PROJECT_ID}: $MESSAGE"
+          echo "synced=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        DOCS_VERSION=$(echo "$HTTP_BODY" | jq -r '.data.version // "unknown"')
+        CHANGELOG_UPDATED=$(echo "$HTTP_BODY" | jq -r '.data.changelogUpdated // false')
+
+        echo "synced=true" >> $GITHUB_OUTPUT
+        echo "docs_version=$DOCS_VERSION" >> $GITHUB_OUTPUT
+
+        echo "✅ Docs updated — version $DOCS_VERSION (changelog updated: $CHANGELOG_UPDATED)"
         echo "::endgroup::"
 
     # ── Step 3: Post PR Comment ──
