@@ -261,6 +261,15 @@ runs:
           -X PUT "${API_URL}/upload/projects/${PROJECT_ID}/spec" \
           -H "X-API-Key: ${APINOTES_API_KEY}" \
           -H "Content-Type: ${CONTENT_TYPE}" \
+          -H "X-CI-Provider: github-actions" \
+          -H "X-CI-Repository: ${GITHUB_REPOSITORY}" \
+          -H "X-CI-Branch: ${GITHUB_REF_NAME}" \
+          -H "X-CI-Commit: ${GITHUB_SHA}" \
+          -H "X-CI-Run-Url: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+          -H "X-CI-Server-Url: ${GITHUB_SERVER_URL}" \
+          -H "X-CI-Actor: ${GITHUB_ACTOR}" \
+          -H "X-CI-Event: ${GITHUB_EVENT_NAME}" \
+          -H "X-CI-Workflow: ${GITHUB_WORKFLOW}" \
           --data-binary @"$SPEC_PATH")
 
         HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
@@ -282,6 +291,7 @@ runs:
         echo "docs_version=$DOCS_VERSION" >> $GITHUB_OUTPUT
 
         echo "✅ Docs updated — version $DOCS_VERSION (changelog updated: $CHANGELOG_UPDATED)"
+        echo "   Deployment logged on your project dashboard (branch: ${GITHUB_REF_NAME}, commit: ${GITHUB_SHA:0:7})"
         echo "::endgroup::"
 
     # ── Step 3: Post PR Comment ──
